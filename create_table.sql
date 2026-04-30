@@ -14,3 +14,10 @@ CREATE TABLE cafe_posts (
 -- GROUP BY author
 -- ORDER BY post_count DESC
 -- LIMIT 20;
+
+-- 수강생별 메모 테이블
+CREATE TABLE author_memos (
+  author     TEXT PRIMARY KEY,
+  memo       TEXT CHECK (char_length(memo) <= 500),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
