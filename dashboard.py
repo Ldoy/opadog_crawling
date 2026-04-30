@@ -49,12 +49,12 @@ with tab1:
         .size()
         .reset_index(name="게시글 수")
         .sort_values("게시글 수", ascending=False)
-        .head(20)
+        .query("`게시글 수` >= 2")
         .reset_index(drop=True)
     )
     top20.index = top20.index + 1
 
-    st.subheader("상위 20명")
+    st.subheader(f"2개 이상 작성자 ({len(top20)}명)")
 
     # HTML 테이블 (게시글 제목 하이퍼링크 포함)
     rows_html = ""
