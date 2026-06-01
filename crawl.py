@@ -1,5 +1,8 @@
 import os
 import time
+import json
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
@@ -15,6 +18,22 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 CAFE_ID = "31706186"
 MENU_ID = "5"
 BOARD_URL = f"https://cafe.naver.com/f-e/cafes/{CAFE_ID}/menus/{MENU_ID}"
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "opadog-crawl")
+HEADLESS = os.environ.get("HEADLESS", "true").lower() != "false"
+
+
+def notify(title, message, priority="default"):
+    try:
+        payload = json.dumps({"topic": NTFY_TOPIC, "title": title, "message": message, "priority": 3}).encode("utf-8")
+        req = urllib.request.Request(
+            "https://ntfy.sh",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"ntfy 알림 실패: {e}")
 
 
 def login(page):
@@ -72,7 +91,16 @@ def parse_posts(frame):
     return posts
 
 
+def load_existing_urls():
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = client.table("cafe_posts").select("post_url").execute()
+    return {row["post_url"] for row in res.data}
+
+
 def crawl_all_pages(page):
+    existing_urls = load_existing_urls()
+    print(f"  기존 DB 게시글 수: {len(existing_urls)}개")
+
     all_posts = []
     page_num = 1
 
@@ -91,7 +119,17 @@ def crawl_all_pages(page):
             print(f"  {page_num} 페이지 게시글 없음 → 종료")
             break
 
-        all_posts.extend(posts)
+        stopped = False
+        for post in posts:
+            if post["post_url"] in existing_urls:
+                print(f"    중복 게시글 발견 → 종료")
+                stopped = True
+                break
+            all_posts.append(post)
+
+        if stopped:
+            break
+
         page_num += 1
 
     return all_posts
@@ -124,25 +162,37 @@ def save_to_supabase(posts):
             print(f"  저장 오류 (batch {i}): {e}")
 
     print(f"\n완료: {success}개 저장됨")
+    return success
 
 
 def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=HEADLESS)
+            context = browser.new_context()
+            page = context.new_page()
 
-        print("네이버 로그인 중...")
-        login(page)
-        print("로그인 완료")
+            print("네이버 로그인 중...")
+            login(page)
+            print("로그인 완료")
 
-        print("\n크롤링 시작...")
-        all_posts = crawl_all_pages(page)
-        print(f"\n총 {len(all_posts)}개 게시글 수집 완료")
+            print("\n크롤링 시작...")
+            all_posts = crawl_all_pages(page)
+            print(f"\n총 {len(all_posts)}개 게시글 수집 완료")
 
-        browser.close()
+            browser.close()
 
-    save_to_supabase(all_posts)
+        saved = save_to_supabase(all_posts)
+        if saved == 0:
+            client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            total = client.table("cafe_posts").select("id", count="exact").execute().count
+            notify("오파독 크롤링 완료 ✅", f"새 게시글 없음 (기존 {total}개 유지)")
+        else:
+            notify("오파독 크롤링 완료 ✅", f"새 게시글 {saved}개 저장 완료")
+    except Exception as e:
+        print(f"크롤링 오류: {e}")
+        notify("오파독 크롤링 실패 ❌", str(e), priority="high")
+        raise
 
 
 if __name__ == "__main__":

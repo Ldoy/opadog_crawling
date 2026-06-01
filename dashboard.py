@@ -1,4 +1,5 @@
 import os
+import requests
 import streamlit as st
 import pandas as pd
 from supabase import create_client
@@ -166,7 +167,27 @@ def render_memo_panel(memos, selected, tab_key):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.title("오파독 과제 게시글 대시보드")
+col_title, col_btn = st.columns([8, 2])
+with col_title:
+    st.title("오파독 과제 게시글 대시보드")
+with col_btn:
+    st.markdown("<div style='margin-top:18px;'>", unsafe_allow_html=True)
+    if st.button("🔄 수동 크롤링", type="primary"):
+        api_url = os.environ.get("CRAWL_API_URL", "")
+        api_token = os.environ.get("CRAWL_API_TOKEN", "")
+        try:
+            res = requests.post(
+                api_url,
+                headers={"Authorization": f"Bearer {api_token}"},
+                timeout=10,
+            )
+            if res.ok:
+                st.success("크롤링 시작됨! 완료 후 새로고침하세요.")
+            else:
+                st.error(f"오류: {res.status_code}")
+        except Exception as e:
+            st.error(str(e))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 df = load_posts()
 st.caption(f"총 {len(df)}개 게시글 수집됨")
