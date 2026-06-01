@@ -221,6 +221,8 @@ if st.session_state.get("crawling", False):
         time.sleep(3)
         st.rerun()
     elif status["state"] == "done":
+        load_posts.clear()
+        load_last_crawled_at.clear()
         st.success(f"✅ {status.get('message', '완료')} — 새로고침해보세요.")
         st.session_state["crawling"] = False
     elif status["state"] == "error":
