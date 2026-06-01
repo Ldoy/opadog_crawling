@@ -20,6 +20,15 @@ MENU_ID = "5"
 BOARD_URL = f"https://cafe.naver.com/f-e/cafes/{CAFE_ID}/menus/{MENU_ID}"
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "opadog-crawl")
 HEADLESS = os.environ.get("HEADLESS", "true").lower() != "false"
+STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crawl_status.json")
+
+
+def write_status(state: str, message: str = ""):
+    try:
+        with open(STATUS_FILE, "w") as f:
+            json.dump({"state": state, "message": message, "updated_at": datetime.now().isoformat()}, f)
+    except Exception:
+        pass
 
 
 def notify(title, message, priority="default"):
@@ -186,11 +195,14 @@ def main():
         if saved == 0:
             client = create_client(SUPABASE_URL, SUPABASE_KEY)
             total = client.table("cafe_posts").select("id", count="exact").execute().count
-            notify("오파독 크롤링 완료 ✅", f"새 게시글 없음 (기존 {total}개 유지)")
+            msg = f"새 게시글 없음 (기존 {total}개 유지)"
         else:
-            notify("오파독 크롤링 완료 ✅", f"새 게시글 {saved}개 저장 완료")
+            msg = f"새 게시글 {saved}개 저장 완료"
+        write_status("done", msg)
+        notify("오파독 크롤링 완료 ✅", msg)
     except Exception as e:
         print(f"크롤링 오류: {e}")
+        write_status("error", str(e))
         notify("오파독 크롤링 실패 ❌", str(e), priority="high")
         raise
 

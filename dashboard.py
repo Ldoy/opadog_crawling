@@ -194,21 +194,38 @@ info_col, btn_col, _ = st.columns([3, 1, 6])
 with info_col:
     st.caption(caption_text)
 with btn_col:
-    if st.button("🔄 수동 크롤링", type="primary"):
-        api_url = os.environ.get("CRAWL_API_URL", "")
-        api_token = os.environ.get("CRAWL_API_TOKEN", "")
+    api_url = os.environ.get("CRAWL_API_URL", "")
+    api_token = os.environ.get("CRAWL_API_TOKEN", "")
+
+    if st.button("🔄 수동 크롤링", type="primary", disabled=st.session_state.get("crawling", False)):
         try:
-            res = requests.post(
-                api_url,
-                headers={"Authorization": f"Bearer {api_token}"},
-                timeout=10,
-            )
+            res = requests.post(api_url, headers={"Authorization": f"Bearer {api_token}"}, timeout=10)
             if res.ok:
-                st.success("크롤링 시작됨! 완료 후 새로고침하세요.")
+                st.session_state["crawling"] = True
+                st.rerun()
             else:
                 st.error(f"오류: {res.status_code}")
         except Exception as e:
             st.error(str(e))
+
+if st.session_state.get("crawling", False):
+    import time
+    try:
+        res = requests.get(api_url.replace("/crawl", "/status"), headers={"Authorization": f"Bearer {api_token}"}, timeout=5)
+        status = res.json() if res.ok else {"state": "unknown"}
+    except Exception:
+        status = {"state": "unknown"}
+
+    if status["state"] == "running":
+        st.info("⏳ 크롤링 중입니다...")
+        time.sleep(3)
+        st.rerun()
+    elif status["state"] == "done":
+        st.success(f"✅ {status.get('message', '완료')} — 새로고침해보세요.")
+        st.session_state["crawling"] = False
+    elif status["state"] == "error":
+        st.error(f"❌ 크롤링 실패: {status.get('message', '')}")
+        st.session_state["crawling"] = False
 
 tab1, tab2 = st.tabs(["상위 20명 작성자", "작성자 검색"])
 
