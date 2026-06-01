@@ -36,6 +36,9 @@ div[data-testid="stButton"] > button {
 div[data-testid="stButton"] > button:hover {
     color: #80c0ff !important;
 }
+div[data-testid="stHorizontalBlock"]:has(div[data-testid="stCaptionContainer"]) {
+    align-items: center !important;
+}
 button[kind="primary"] {
     background: #1f77b4 !important;
     border: 1px solid #1f77b4 !important;
@@ -179,11 +182,18 @@ def render_memo_panel(memos, selected, tab_key):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-col_title, col_btn = st.columns([8, 2])
-with col_title:
-    st.title("오파독 과제 게시글 대시보드")
-with col_btn:
-    st.markdown("<div style='margin-top:18px;'>", unsafe_allow_html=True)
+st.title("오파독 과제 게시글 대시보드")
+
+df = load_posts()
+last_crawled = load_last_crawled_at()
+caption_text = f"총 {len(df)}개 게시글 수집됨"
+if last_crawled:
+    caption_text += f"　|　마지막 업데이트: {last_crawled}"
+
+info_col, btn_col = st.columns([9, 1])
+with info_col:
+    st.caption(caption_text)
+with btn_col:
     if st.button("🔄 수동 크롤링", type="primary"):
         api_url = os.environ.get("CRAWL_API_URL", "")
         api_token = os.environ.get("CRAWL_API_TOKEN", "")
@@ -199,14 +209,6 @@ with col_btn:
                 st.error(f"오류: {res.status_code}")
         except Exception as e:
             st.error(str(e))
-    st.markdown("</div>", unsafe_allow_html=True)
-
-df = load_posts()
-last_crawled = load_last_crawled_at()
-caption = f"총 {len(df)}개 게시글 수집됨"
-if last_crawled:
-    caption += f"　|　마지막 업데이트: {last_crawled}"
-st.caption(caption)
 
 tab1, tab2 = st.tabs(["상위 20명 작성자", "작성자 검색"])
 
