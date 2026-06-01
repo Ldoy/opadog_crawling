@@ -190,7 +190,7 @@ caption_text = f"총 {len(df)}개 게시글 수집됨"
 if last_crawled:
     caption_text += f"　|　마지막 업데이트: {last_crawled}"
 
-info_col, btn_col = st.columns([9, 1])
+info_col, btn_col, _ = st.columns([3, 1, 6])
 with info_col:
     st.caption(caption_text)
 with btn_col:
