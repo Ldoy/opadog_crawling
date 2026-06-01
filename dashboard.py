@@ -57,6 +57,18 @@ def get_client():
 
 
 @st.cache_data(ttl=300)
+def load_last_crawled_at():
+    client = get_client()
+    res = client.table("cafe_posts").select("crawled_at").order("crawled_at", desc=True).limit(1).execute()
+    if res.data:
+        from datetime import datetime, timezone, timedelta
+        dt = datetime.fromisoformat(res.data[0]["crawled_at"])
+        kst = dt.astimezone(timezone(timedelta(hours=9)))
+        return kst.strftime("%Y년 %m월 %d일 %H:%M")
+    return None
+
+
+@st.cache_data(ttl=300)
 def load_posts():
     client = get_client()
     rows = []
@@ -190,7 +202,11 @@ with col_btn:
     st.markdown("</div>", unsafe_allow_html=True)
 
 df = load_posts()
-st.caption(f"총 {len(df)}개 게시글 수집됨")
+last_crawled = load_last_crawled_at()
+caption = f"총 {len(df)}개 게시글 수집됨"
+if last_crawled:
+    caption += f"　|　마지막 업데이트: {last_crawled}"
+st.caption(caption)
 
 tab1, tab2 = st.tabs(["상위 20명 작성자", "작성자 검색"])
 
