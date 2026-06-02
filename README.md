@@ -122,3 +122,4 @@ CRAWL_API_TOKEN = "your-token"
 | Streamlit Cloud 빌드 실패 | requirements.txt에 playwright 포함 | playwright는 로컬/서버 전용, 제외 |
 | Supabase Invalid API key | supabase 패키지 버전 낮음 | `supabase>=2.10.0` 사용 |
 | cron 엉뚱한 시간에 실행 | CRON_TZ 미동작 | UTC로 직접 변환해서 등록 |
+| 대시보드에 중복 게시글 | 같은 글이 page=1, page=8로 다른 URL에 중복 저장 | `href.split("?")[0]`으로 쿼리파라미터 제거 후 저장 |
