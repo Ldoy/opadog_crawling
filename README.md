@@ -1,144 +1,124 @@
-# 네이버 카페 게시글 크롤링 스크립트
+# 오파독 카페 게시글 크롤링 & 대시보드
 
 ## 목적
-네이버 카페 특정 게시판의 **전체 게시글**을 수집해 Supabase에 저장하고,  
-**상위 20명 작성자**를 확인한다.
+네이버 카페(오파독) 특정 게시판의 게시글을 크롤링해 Supabase에 저장하고, Streamlit 대시보드로 조회한다.
 
----
-
-## 크롤링 대상
-- **게시판 URL**: https://cafe.naver.com/f-e/cafes/31706186/menus/5
-- **수집 항목**: 제목, 작성자, 작성일, 게시글 링크
-- **수집 범위**: 1페이지 ~ 끝 페이지 (전체)
+- **대시보드**: https://opadogcrawling.streamlit.app
+- **게시판**: https://cafe.naver.com/f-e/cafes/31706186/menus/5
 
 ---
 
 ## 파일 구조
 
 ```
-naver-cafe-post-crawling/
-├── crawl.py          ← 메인 크롤링 스크립트
-├── .env              ← 인증 정보 (직접 입력 필요)
-├── requirements.txt  ← Python 패키지 목록
+opadog_crawling/
+├── crawl.py          ← 크롤링 스크립트 (Playwright, 로컬/서버 실행)
+├── api_server.py     ← FastAPI 트리거 서버 (Hetzner 포트 8006)
+├── dashboard.py      ← Streamlit 대시보드
+├── .env              ← 인증 정보 (git 제외)
+├── requirements.txt  ← 대시보드용 패키지 (playwright 제외)
 ├── create_table.sql  ← Supabase 테이블 생성 SQL
-└── README.md         ← 이 파일
+└── README.md
 ```
 
 ---
 
-## 사전 준비
+## 환경변수
 
-### 1. Python 3 설치 확인
-```bash
-python3 --version
-```
+| 변수 | 용도 | 위치 |
+|------|------|------|
+| `NAVER_ID` | 네이버 로그인 ID | .env (crawl.py 전용) |
+| `NAVER_PW` | 네이버 로그인 PW | .env (crawl.py 전용) |
+| `SUPABASE_URL` | Supabase 프로젝트 URL | .env / Streamlit Secrets |
+| `SUPABASE_KEY` | Supabase anon key | .env / Streamlit Secrets |
+| `NTFY_TOPIC` | ntfy 알림 토픽 (기본값: `opadog-crawl`) | .env 선택사항 |
+| `HEADLESS` | 브라우저 headless 여부 (기본값: `true`) | .env 선택사항 |
+| `CRAWL_API_URL` | 수동 크롤링 API URL | Streamlit Secrets 전용 |
+| `CRAWL_API_TOKEN` | 수동 크롤링 API 토큰 | Streamlit Secrets 전용 |
 
-### 2. 패키지 설치
+---
+
+## 로컬 실행
+
 ```bash
-pip install -r requirements.txt
+# 1. 패키지 설치 (최초 1회)
+pip install playwright supabase python-dotenv
 playwright install chromium
-```
 
-### 3. .env 파일 작성
-`.env` 파일을 열어 아래 4개 값을 채운다.
+# 2. .env 파일 작성
+cp .env.example .env  # NAVER_ID, NAVER_PW, SUPABASE_URL, SUPABASE_KEY 입력
 
-```
-NAVER_ID=네이버아이디
-NAVER_PW=네이버비밀번호
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_KEY=your-anon-key
-```
+# 3. 크롤링 실행 (브라우저 창 열림)
+python3 crawl.py
 
-> Supabase URL과 Key는 Supabase 대시보드 → Project Settings → API에서 확인
-
-### 4. Supabase 테이블 생성
-Supabase 대시보드 → SQL Editor에서 `create_table.sql` 내용을 실행한다.
-
-```sql
-CREATE TABLE cafe_posts (
-  id          BIGSERIAL PRIMARY KEY,
-  title       TEXT NOT NULL,
-  author      TEXT NOT NULL,
-  written_at  TEXT,
-  post_url    TEXT UNIQUE NOT NULL,
-  crawled_at  TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
----
-
-## 실행
-
-```bash
-python crawl.py
-```
-
-실행하면 순서대로 진행된다:
-1. 브라우저 창이 열리며 네이버 로그인
-2. 마지막 페이지 번호 자동 확인
-3. 1페이지부터 끝 페이지까지 순차 크롤링
-4. Supabase에 100개씩 배치 저장
-
-> 브라우저 창이 열리는 이유: 네이버 캡차나 2차 인증이 뜰 경우 직접 처리하기 위함.  
-> 문제 없이 통과되면 자동으로 진행된다.
-
----
-
-## 결과 확인: 상위 20명 작성자
-
-크롤링 완료 후 Supabase SQL Editor에서 실행:
-
-```sql
-SELECT author, COUNT(*) AS post_count
-FROM cafe_posts
-GROUP BY author
-ORDER BY post_count DESC
-LIMIT 20;
-```
-
----
-
-## 대시보드 (`dashboard.py`)
-
-Streamlit 기반 대시보드. 아래 명령으로 실행:
-
-```bash
+# 4. 대시보드 실행
 streamlit run dashboard.py
 ```
 
-### 탭 구성
+---
 
-- **상위 20명 작성자**: 게시글을 2개 이상 작성한 사람 전체를 게시글 수 내림차순으로 표시 (작성자 수 동적 표시). 각 작성자의 게시글 제목은 링크로 표시됨.
-- **작성자 검색**: 작성자 이름으로 검색해 해당 게시글 목록 확인
+## Hetzner 서버 설정 (5.223.71.64)
 
-### 변경 이력
+### 경로
+- 크롤링: `/root/naver-cafe-crawling/`
 
-| 날짜 | 내용 |
-|------|------|
-| 2026-04-30 | 상위 20명 고정 → 게시글 2개 이상 작성자 전체 표시로 변경 |
+### 자동 크롤링 (cron)
+```
+0 0 * * * cd /root/naver-cafe-crawling && python3 crawl.py >> /root/naver-cafe-crawling/crawl.log 2>&1
+```
+> ⚠️ 서버 cron은 UTC 기준. `CRON_TZ=Asia/Seoul` 미동작 확인됨.
+> KST 9시 = UTC 0시 → `0 0 * * *` 사용
+
+### API 서버 (pm2: crawl-api, 포트 8006)
+- `POST /crawl` — 크롤링 트리거 (Bearer 토큰 인증)
+- `GET /status` — 크롤링 상태 조회 (`running` / `done` / `error` / `idle`)
+
+### 파일 업로드
+```bash
+scp -i ~/.ssh/hetzner_iris crawl.py api_server.py root@5.223.71.64:/root/naver-cafe-crawling/
+
+# api_server 재시작
+ssh -i ~/.ssh/hetzner_iris root@5.223.71.64 \
+  "export PATH='/root/.local/share/fnm/node-versions/v22.22.2/installation/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH' && pm2 restart crawl-api"
+```
+
+---
+
+## Streamlit Cloud 배포
+
+1. GitHub push → 자동 재배포
+2. Secrets 설정: share.streamlit.io → 앱 → Settings → Secrets
+
+```toml
+SUPABASE_URL = "https://xxxx.supabase.co"
+SUPABASE_KEY = "sb_publishable_..."
+CRAWL_API_URL = "http://5.223.71.64:8006/crawl"
+CRAWL_API_TOKEN = "your-token"
+```
+
+---
+
+## 크롤링 동작 방식
+
+1. 로그인: Playwright로 네이버 ID/PW 주입 → 로그인
+2. **중복 감지 조기 종료**: 크롤 전 DB 기존 URL 전체 로드 → 중복 URL 만나면 즉시 종료
+3. 저장: `upsert(on_conflict="post_url")` — 새 글 추가, 기존 글 업데이트
+4. 완료 시: ntfy 알림 + `crawl_status.json` 업데이트
+
+### CSS 셀렉터
+- 행: `#cafe_content > div.article-board > table > tbody > tr`
+- 제목+링크: `a.article`
+- 작성자: `span.nickname`
+- 작성일: `td.td_normal.type_date`
 
 ---
 
 ## 트러블슈팅
 
-### 수집된 데이터가 비어있는 경우
-네이버 카페 새 UI(`f-e` 형식)는 CSS 클래스명이 자주 변경된다.  
-`crawl.py`의 `parse_posts()` 함수 내 셀렉터를 수정해야 할 수 있다.
-
-브라우저 창에서 게시판 페이지를 열고 개발자 도구(F12) → Elements 탭에서  
-제목/작성자/날짜 요소의 클래스명을 확인한 뒤 아래 부분을 수정한다:
-
-```python
-# crawl.py 내 parse_posts() 함수
-title_el  = row.query_selector("여기를 실제 클래스명으로 수정")
-author_el = row.query_selector("여기를 실제 클래스명으로 수정")
-date_el   = row.query_selector("여기를 실제 클래스명으로 수정")
-link_el   = row.query_selector("여기를 실제 클래스명으로 수정")
-```
-
-### 로그인 후 캡차가 뜨는 경우
-브라우저 창에서 직접 캡차를 해결하면 스크립트가 자동으로 이어서 진행된다.
-
-### 속도 조절
-크롤링이 너무 빠르면 네이버에서 차단될 수 있다.  
-`crawl.py` 내 `time.sleep(1.5)` 값을 높여 조절한다.
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 게시글 0개 수집 | CSS 셀렉터 불일치 | 개발자도구로 실제 클래스명 확인 |
+| ntfy 제목 깨짐 | URL-encode 방식 사용 | JSON body 방식으로 변경 |
+| Streamlit Cloud 빌드 실패 | requirements.txt에 playwright 포함 | playwright는 로컬/서버 전용, 제외 |
+| Supabase Invalid API key | supabase 패키지 버전 낮음 | `supabase>=2.10.0` 사용 |
+| cron 엉뚱한 시간에 실행 | CRON_TZ 미동작 | UTC로 직접 변환해서 등록 |
