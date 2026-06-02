@@ -77,6 +77,7 @@ def parse_posts(frame):
                 href = link_el.get_attribute("href") if link_el else ""
                 if href and not href.startswith("http"):
                     href = "https://cafe.naver.com" + href
+                href = href.split("?")[0] if href else ""
 
                 author_el = row.query_selector("span.nickname")
                 author = author_el.inner_text().strip() if author_el else ""
