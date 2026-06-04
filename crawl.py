@@ -129,15 +129,18 @@ def crawl_all_pages(page):
             print(f"  {page_num} 페이지 게시글 없음 → 종료")
             break
 
-        stopped = False
+        new_on_page = 0
         for post in posts:
+            # 공지(고정) 게시글이 페이지 상단에 항상 노출되므로 중복은 건너뛰고 계속 스캔한다.
+            # 첫 중복에서 종료하면 공지 아래의 신규 게시글을 놓친다.
             if post["post_url"] in existing_urls:
-                print(f"    중복 게시글 발견 → 종료")
-                stopped = True
-                break
+                continue
             all_posts.append(post)
+            existing_urls.add(post["post_url"])
+            new_on_page += 1
 
-        if stopped:
+        if new_on_page == 0:
+            print(f"  {page_num} 페이지 신규 게시글 없음 → 종료")
             break
 
         page_num += 1
